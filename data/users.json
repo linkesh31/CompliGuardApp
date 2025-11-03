@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "email": "admin@compliguard.local",
+      "password_hash": "$2b$12$Vlvqw7CiYrnYnHbjEWRaAu1yoNVj5IV68zM.0IYkyK1yA636QZOOS",
+      "role": "admin",
+      "active": true
+    },
+    {
+      "email": "admin@gmail.com",
+      "password_hash": "$2b$12$O6dALtfrC8Y17I9VOklMfuNN.IUVJIR1orc0JdQtel8PvsTJnR0Nq",
+      "role": "admin",
+      "active": true
+    }
+  ]
+}

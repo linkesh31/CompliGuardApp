@@ -1,0 +1,8 @@
+firebase-admin
+google-cloud-firestore
+bcrypt
+python-dotenv
+pillow
+opencv-python
+ultralytics
+tk
