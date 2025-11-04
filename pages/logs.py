@@ -1,3 +1,4 @@
+# pages/logs.py
 import io
 import base64
 import threading
@@ -20,7 +21,6 @@ from services.workers import (
 # Violations + WhatsApp messaging
 from services.violations import record_offender_on_violation
 from services.messaging import prepare_and_send_whatsapp
-
 
 # ───────── helpers ─────────
 def _s(v: Any) -> str:
@@ -957,7 +957,6 @@ class LogsPage(tk.Frame):
             return
 
         # figure out company context (id + name)
-        # priority: controller -> session user -> error
         company_id = getattr(self.controller, "current_company_id", None)
         company_name = getattr(self.controller, "current_company_name", None)
 
@@ -1001,7 +1000,7 @@ class LogsPage(tk.Frame):
             else:
                 worker = candidates[0]
 
-        # persist offender info + compute strike count + prep whatsapp info
+        # persist offender info + compute strike count
         violation_after, strike_count, err = record_offender_on_violation(
             violation_id=s.id,
             worker=worker,
@@ -1011,8 +1010,27 @@ class LogsPage(tk.Frame):
             messagebox.showerror("Update Failed", f"Could not save details:\n{err}")
             return
 
+        # ⬇⬇⬇ NEW: enrich with zone risk level so WhatsApp message always has it
+        if violation_after is None:
+            violation_after = {}
+        # carry over existing zone info from table row snapshot if missing
+        vio_zone_id = _s(violation_after.get("zone_id") or d.get("zone_id"))
+        vio_zone_name = _s(violation_after.get("zone_name") or d.get("zone_name") or vio_zone_id)
+        # compute level using our cached zone metadata
+        zone_level_key = self._zone_level_for(vio_zone_id, vio_zone_name)
+        if vio_zone_name and not _s(violation_after.get("zone_name")):
+            violation_after["zone_name"] = vio_zone_name
+        if zone_level_key:
+            violation_after["zone_risk_level"] = zone_level_key
+            # also put into nested zone dict for broader compatibility
+            z = violation_after.get("zone")
+            if not isinstance(z, dict):
+                z = {}
+            z["risk_level"] = zone_level_key
+            violation_after["zone"] = z
+
         # attempt WhatsApp open
-        if violation_after is not None and strike_count is not None:
+        if strike_count is not None:
             result = prepare_and_send_whatsapp(
                 violation=violation_after,
                 strike_count=strike_count,
