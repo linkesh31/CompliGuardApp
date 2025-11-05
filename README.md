@@ -42,8 +42,7 @@ cd compliguard
 ```
 
 2. Create & activate a virtual environment
-
-# PowerShell
+## PowerShell
 ```bash
 python -m venv .venv
 . .venv\Scripts\activate
