@@ -1,247 +1,213 @@
 CompliGuard – PPE Compliance Monitoring System
-Overview
 
-CompliGuard is a desktop safety application that automates detection of PPE (helmet, vest, gloves, boots), records violations with evidence, manages workers and zones, and produces audit-ready reports.
-It’s built in Python with a polished Tkinter/CustomTkinter UI and uses Firebase/Firestore as the cloud data layer.
+A desktop safety application that detects PPE non-compliance (helmet, vest, gloves, boots) in real-time, records violations with snapshot evidence, manages workers/zones/cameras, and generates audit-ready reports — all with a polished Tkinter / CustomTkinter UI and Firebase Firestore as the data layer.
 
-Key Features
+Why CompliGuard? Move from manual spot-checks to an objective, traceable, and operator-friendly workflow that links detection → identification → escalation → reporting.
 
-Real-time PPE Detection: Live Monitor with verification window, high-risk escalation, and snapshot evidence.
+✨ Key Features
 
-Logs & Strikes: Identify offender, record single-strike per violation, auto-count cumulative strikes, WhatsApp escalation.
+Live Monitor (Real-time CV)
 
-Zones & Cameras: CRUD for zones with risk levels; camera management with URL validation and online/offline heartbeat.
+Continuous inference, 10s verification window, high-risk pop-up, snapshot evidence
 
-Workers & Users: Unique worker IDs, phone validation (+country code), admin management with hashed passwords.
+Camera online/offline heartbeat display
 
-Reports: Daily trends, zone and risk breakdowns, PPE (including combinations), offender recurrence, CSV/PDF export.
+Logs & Strikes
 
-Theming & UX: Consistent light/beige UI shell with header + sidebar, keyboard-friendly forms, and status feedback.
+Identify offender from worker registry
 
-Tech Stack
+One strike per violation, auto cumulative strike count, WhatsApp escalation message
 
-Language: Python 3.10–3.12 (Windows recommended)
+Zones & Cameras
 
-UI: Tkinter + CustomTkinter
+CRUD for zones (risk level: low/med/high)
 
-CV / Inference: OpenCV, Ultralytics YOLOv8 (custom PPE model + person model)
+Camera inventory with URL validation (RTSP/HTTP) and heartbeat status
 
-Storage: Firebase Admin SDK (Firestore; optional Storage)
+Workers & Users
 
-Imaging: Pillow (PIL)
+Unique worker IDs, strict phone normalization (+country code)
 
-Utilities: bcrypt (password hashing), requests, python-dotenv (env), reportlab (PDF export)
+Admin management, secure password hashing (bcrypt preferred)
 
-Messaging: WhatsApp deep-link via default browser
+Reports
 
-Getting Started
-Prerequisites
+Trends by date, zone & risk, PPE (incl. combinations), offender recurrence
 
-Windows 10/11 with Python 3.10 – 3.12 installed and on PATH
+CSV / PDF export, preview tables and quick date chips
+
+UX
+
+Consistent light/beige theme, sidebar navigation, clear states and feedback
+
+🧰 Tech Stack
+Area	Tools
+Language	Python 3.10 – 3.12 (Windows recommended)
+UI	Tkinter + CustomTkinter
+CV	OpenCV, Ultralytics YOLOv8 (custom PPE model + person model)
+Cloud	Firebase Admin SDK (Firestore; optional Storage)
+Imaging	Pillow (PIL)
+Utilities	bcrypt, requests, python-dotenv, reportlab
+Messaging	WhatsApp deep-link via default browser
+🚀 Getting Started
+1) Prerequisites
+
+Windows 10/11 with Python 3.10–3.12 on PATH
 
 A Firebase project and service account JSON
 
-If you plan to use GPU acceleration, install appropriate NVIDIA drivers/CUDA (optional)
+(Optional) NVIDIA drivers/CUDA for GPU acceleration
 
-Microsoft Visual C++ Redistributable (for some wheels like bcrypt, if needed)
+Microsoft Visual C++ Redistributable (needed by some wheels like bcrypt)
 
-Clone the repository
+2) Clone
 git clone https://github.com/<your-username>/<your-repo>.git
 cd <your-repo>
 
-Create & activate a virtual environment
-# Windows (PowerShell)
+3) Virtual environment
+# PowerShell
 python -m venv .venv
-.venv\Scripts\activate
+. .venv\Scripts\activate
 
-Install dependencies
+4) Dependencies
 
-If you don’t have a requirements.txt yet, create one with the block below.
+Create a requirements.txt (or copy the block below) and install:
 
 pip install -r requirements.txt
 
 
-requirements.txt (recommended)
+requirements.txt
 
-# UI
 customtkinter==5.2.2
-# CV
 opencv-python==4.10.0.84
 numpy>=1.24
 pillow>=9.5
 ultralytics>=8.2.0
-# Firebase / Google
 firebase-admin>=6.5.0
 google-cloud-firestore>=2.14.0
 google-cloud-storage>=2.16.0
-# Utilities
 bcrypt>=4.1.2
 requests>=2.31.0
 python-dotenv>=1.0.1
 reportlab>=4.0.9
 
 
-If any wheel fails to build (e.g., bcrypt), install Microsoft C++ Build Tools or temporarily skip bcrypt during development; the app supports a fallback hasher for dev environments.
+If bcrypt fails to build, install MS C++ Build Tools or temporarily remove bcrypt during development. Use bcrypt in production.
 
-Environment Variables
+5) Environment variables
 
-Create a file named .env in the project root (or set variables in your system environment).
+Create .env in the repo root (use .env.example below as a start):
 
-# Firebase / Google
+.env.example
+
 GOOGLE_APPLICATION_CREDENTIALS=./secrets/serviceAccount.json
-FIREBASE_PROJECT_ID=<your-project-id>
+FIREBASE_PROJECT_ID=your-project-id
+COMPANY_NAME=Your Company
 
-# App brand (shown in UI headers / reports)
-COMPANY_NAME=<Your Company Name>
-
-# Optional: Email/SMTP if you later wire emailer.py
+# Optional email (if you wire up emailer.py later)
 SMTP_HOST=
 SMTP_PORT=
 SMTP_USER=
 SMTP_PASS=
 
 
-Put your service account JSON at ./secrets/serviceAccount.json or update the path accordingly.
-Firestore security rules should allow the Admin SDK (service account) to read/write the collections used by the app.
+Put your service account JSON at ./secrets/serviceAccount.json (create the folder).
 
-Model Files
+6) Model files
 
-Place your trained model files in a models/ folder:
+Place your YOLO weights in models/:
 
 models/
-├─ best.pt                 # custom PPE detector (helmet/vest/gloves/boots)
-└─ yolov8n.pt              # person model (if required by your pipeline)
+├─ best.pt        # your custom PPE model (helmet/vest/gloves/boots)
+└─ yolov8n.pt     # person model (if your pipeline uses a separate one)
 
 
-You can rename paths in services/ppe_infer.py if your filenames differ.
+Adjust paths in services/ppe_infer.py if needed.
 
-Running the App
-# Make sure the venv is activated
+7) Run
 python app.py
 
-
-On first run, the app will initialize Firebase, render the UI shell, and load the default company/site context after you sign in.
-
-Project Structure
-
-A typical layout for this repository:
-
+📂 Project Structure (typical)
 <repo-root>/
-├─ app.py                      # App entry
-├─ data/ui/                    # Icons, avatars, logos, card images
-├─ models/                     # YOLO weights (best.pt, yolov8n.pt)
-├─ secrets/                    # serviceAccount.json (not committed)
+├─ app.py
+├─ models/                 # YOLO weights
+├─ secrets/                # serviceAccount.json (gitignored)
 ├─ services/
-│  ├─ firebase_client.py       # Firestore init
-│  ├─ firebase_auth.py         # Auth helpers (if used)
-│  ├─ users.py                 # Admin user CRUD (hashing, status)
-│  ├─ workers.py               # Worker CRUD + phone validation
-│  ├─ zones.py                 # Zones + cameras + heartbeat helpers
-│  ├─ violations.py            # Strikes & offender update helpers
-│  ├─ ppe_infer.py             # Inference wrapper (YOLO)
-│  ├─ ui_theme.py              # Theme tokens/styling
-│  ├─ ui_assets.py             # Icon/image loader
-│  ├─ session.py               # In-memory session store
-│  ├─ messaging.py             # WhatsApp deeplink builder
-│  ├─ reports.py               # CSV / PDF export helpers
-│  └─ security.py              # Hashing (bcrypt preferred)
-├─ views/ or pages/            # (If split) Tkinter page classes
-├─ .env                        # Your environment variables
+│  ├─ firebase_client.py
+│  ├─ users.py             # admin CRUD + hashing
+│  ├─ workers.py           # worker CRUD + phone normalization
+│  ├─ zones.py             # zones + cameras + heartbeat helpers
+│  ├─ violations.py        # strikes + offender updates
+│  ├─ ppe_infer.py         # YOLO inference wrapper
+│  ├─ ui_theme.py          # theme + components
+│  ├─ ui_assets.py         # icons/images loader
+│  ├─ session.py           # in-memory session
+│  ├─ messaging.py         # WhatsApp deeplink
+│  └─ reports.py           # CSV/PDF exports
+├─ data/ui/                # UI assets (logos/icons)
+├─ .env
 └─ requirements.txt
 
+🧑‍💼 User Roles
 
-(Exact filenames may vary; the above mirrors the code you provided.)
+Superadmin – multi-site/company view, manage companies and admins
 
-Usage Guide
-Roles
+Admin / Safety Officer – day-to-day operations at a site
 
-Superadmin: Multi-site view; manage companies and admins.
+🖱️ Using the App
 
-Admin / Safety Officer: Daily operations for one company/site.
+Login / Entry → select company context
 
-Main Pages
+Zones → create zones, set risk, assign cameras (validated URLs/heartbeat)
 
-Login/Entry: Authenticate and select company context.
+Workers → add/activate workers; store phone as +<countrycode><number>
 
-Dashboard/Home: Quick KPIs and navigation.
+Live Monitor → real-time detection, 10s verification, high-risk pop-up, snapshot
 
-Zones: Create/edit zones, assign cameras, set risk levels.
+Logs → open violation, identify offender, system records/ensures strike, prepare WhatsApp
 
-Workers: Add/modify workers with unique IDs and phone normalization (+country code).
+Reports → filter by date/zone/PPE(PPE-combos), export CSV/PDF
 
-Live Monitor: Real-time detection; 10s verification timer; high-risk popup; snapshots.
+📦 Packaging (optional)
 
-Logs: Search violations, identify offender, record strikes, open WhatsApp message.
-
-Reports: Preview and export CSV/PDF for trends, zones, PPE combos, offenders, daily counts.
-
-Add Admin / Profile: Manage users and account details.
-
-Data Model (Core Collections)
-
-users: { email, name, role, company_id, status, password_hash, ... }
-
-workers: { worker_id, name, phone, active, company_id, created_at }
-
-zones: { name, description, risk_level, company_id, created_at, updated_at }
-
-cameras: { name, rtsp_url/http, zone_id, company_id, mode, online, last_heartbeat }
-
-violations: { ts, zone_id, company_id, snapshot, offender_id/name/phone, ppe_status, risk }
-
-strikes: { worker_id, worker_name, company_id, violation_id, created_at }
-
-Packaging (Optional)
-
-To create a single-file executable with PyInstaller:
+Create a single executable with PyInstaller:
 
 pip install pyinstaller
 pyinstaller --noconfirm --name CompliGuard --onefile --add-data "data/ui;data/ui" app.py
-# Copy models/ and .env next to the EXE or embed with --add-data as needed
+# Copy models/ and .env next to the EXE (or add with --add-data)
 
-Troubleshooting
+🛠 Troubleshooting
 
-App can’t find Firebase credentials
-Ensure GOOGLE_APPLICATION_CREDENTIALS points to your service account JSON and the path exists.
+Firebase credentials not found
+Ensure GOOGLE_APPLICATION_CREDENTIALS points to an existing serviceAccount.json.
 
-bcrypt fails to install
-Install Microsoft C++ Build Tools (or use the precompiled wheel for your Python version). As a temporary dev fallback, you can comment bcrypt in requirements and rely on the built-in dev hasher—but use bcrypt in production.
+bcrypt install error
+Install MS C++ Build Tools or use precompiled wheel matching your Python version.
 
-OpenCV import errors
-Reinstall opencv-python matching your Python version. If you installed opencv-contrib-python, keep only one OpenCV distribution in the venv.
+OpenCV import error
+Reinstall opencv-python for your Python version; avoid mixing multiple OpenCV wheels.
 
-WhatsApp message doesn’t open
-Make sure the default browser is set and that the device can access https://wa.me/<number> links. Phone numbers must be stored with +<countrycode>.
+WhatsApp link doesn’t open
+Default browser must be set; numbers must include +country code.
 
-Models load slowly or detections are erratic
-Verify model paths in services/ppe_infer.py, ensure the models/ directory exists, and test with a stable camera stream. Consider lowering input size or frame rate for slower CPUs.
+Models slow / inconsistent
+Verify paths and models folder; reduce input size / FPS for weaker CPUs; ensure a stable stream.
 
-Contributing
+📊 Roadmap (next phase)
 
-Fork the repository
+Multi-platform client (web/mobile) backed by a local API service
 
-Create a feature branch: git checkout -b feature/<FeatureName>
+Active learning pipeline for PPE model (hard-frame mining + periodic retraining)
 
-Commit changes: git commit -m "Add <FeatureName>"
+Deeper analytics with audit-ready weekly/monthly packs
 
-Push: git push origin feature/<FeatureName>
+🙏 Acknowledgments
 
-Open a Pull Request
+Thanks to supervisors, safety officers, and testers who provided invaluable feedback; and to the open-source communities behind Python, CustomTkinter, Ultralytics, and Firebase.
 
-License
+📬 Contact
 
-If you don’t already have a license file, this project can be released under MIT License. Add a LICENSE file or update this section to your chosen license.
+Your Name — your.email@example.com
 
-Acknowledgments
-
-Supervisors and reviewers who provided feedback during development
-
-Safety officers and testers who validated the workflow and reports
-
-Open-source authors of Python, CustomTkinter, Ultralytics, and Firebase SDKs
-
-Contact
-
-Your Name – your.email@example.com
-
-Project Link – https://github.com/<your-username>/<your-repo>
+Repo: https://github.com/
+<your-username>/<your-repo>
