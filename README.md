@@ -42,19 +42,21 @@ cd compliguard
 ```
 
 2. Create & activate a virtual environment
-## PowerShell
+#### PowerShell
 ```bash
 python -m venv .venv
 . .venv\Scripts\activate
 ```
 
-Install dependencies
+3. Install dependencies
 
+```bash
 pip install -r requirements.txt
+```
 
+4. If you don’t have requirements.txt, create it with:
 
-If you don’t have requirements.txt, create it with:
-
+```bash
 customtkinter==5.2.2
 opencv-python==4.10.0.84
 numpy>=1.24
@@ -67,49 +69,48 @@ bcrypt>=4.1.2
 requests>=2.31.0
 python-dotenv>=1.0.1
 reportlab>=4.0.9
+```
 
+5. If bcrypt fails to build, install MS C++ Build Tools or omit it during development and re-enable for production.
 
-If bcrypt fails to build, install MS C++ Build Tools or omit it during development and re-enable for production.
-
-Set up environment variables
+6. Set up environment variables
 Create .env (you can keep a .env.example and copy it):
 
-GOOGLE_APPLICATION_CREDENTIALS=./secrets/serviceAccount.json
+7. GOOGLE_APPLICATION_CREDENTIALS=./secrets/serviceAccount.json
 FIREBASE_PROJECT_ID=your-project-id
 COMPANY_NAME=Your Company
 
-# Optional email settings (only if you wire email sender)
+8. Optional email settings (only if you wire email sender)
+```bash
 SMTP_HOST=
 SMTP_PORT=
 SMTP_USER=
 SMTP_PASS=
+```
 
+9. Add model files
 
-Put your service account at:
-
-secrets/serviceAccount.json
-
-
-(Ensure the secrets/ folder is gitignored.)
-
-Add model files
-
+```
 models/
-├─ best.pt        # custom PPE model (helmet/vest/gloves/boots)
+├─ best.pt        # custom PPE model (helmet/vest)
 └─ yolov8n.pt     # person model (if your pipeline uses it)
+└─ gloves_shoes_yolo9e.pt     # custom PPE model (gloves/shoes)
+```
 
+10. Update paths in services/ppe_infer.py if you use different names.
 
-Update paths in services/ppe_infer.py if you use different names.
-
-Run the application
-
+11. Run the application
+ ```bash
 python app.py
+```
 
-Project Structure
+## Project Structure
+
+```
 compliguard/
 ├── app.py
 ├── models/                 # YOLO weights
-├── secrets/                # serviceAccount.json (ignored)
+├── pages/                  # Frontend + UI
 ├── services/
 │   ├── firebase_client.py
 │   ├── users.py            # admin CRUD + hashing
@@ -125,39 +126,32 @@ compliguard/
 ├── data/ui/                # UI assets (logos/icons)
 ├── .env
 └── requirements.txt
+```
 
-User Roles
+## User Roles
 
-Superadmin: Multi-site/company management and admin creation
+-   **Superadmin**: Multi-site/company management and admin creation
+-   **Admin / Safety Officer**: Day-to-day operations for one site (zones, workers, live monitor, logs, reports)
 
-Admin / Safety Officer: Day-to-day operations for one site (zones, workers, live monitor, logs, reports)
+## Contributing
 
-Contributing
+1. Fork the repository
+2. Create your feature branch 
+3. Commit your changes 
+4. Push to the branch 
+5. Open a Pull Request
 
-Fork the repository
-
-Create your feature branch (git checkout -b feature/AmazingFeature)
-
-Commit your changes (git commit -m "Add AmazingFeature")
-
-Push to the branch (git push origin feature/AmazingFeature)
-
-Open a Pull Request
-
-License
+## License
 
 This project is licensed under the MIT License — see the LICENSE file for details.
 
-Acknowledgments
+## Acknowledgments
 
-Site supervisors and safety officers who tested the workflow
+-   Site supervisors and safety officers who tested the workflow
+-   Project supervisors and mentors
+-   Open-source communities behind Python, CustomTkinter, Ultralytics, and Firebase
 
-Project supervisors and mentors
+## Contact
 
-Open-source communities behind Python, CustomTkinter, Ultralytics, and Firebase
-
-Contact
-
-Your Name — your.email@example.com
-
-Project Link: https://github.com/yourusername/compliguard
+Linkesh Jaya Prakash Rao — [linkeshjpr.25@gmail.com]
+Project Link: [https://github.com/linkesh31/CompliGuardApp]
