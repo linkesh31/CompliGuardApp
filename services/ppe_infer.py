@@ -10,7 +10,7 @@ try:
 except Exception as e:  # pragma: no cover
     raise RuntimeError("Ultralytics is required: pip install ultralytics") from e
 
-# NEW: lightweight torch import only for device checks (no logic changes)
+# Lightweight torch import only for device checks
 try:
     import torch
 except Exception:  # pragma: no cover
@@ -216,13 +216,13 @@ def match_compliance(
       best_hb, best_vb, glove_boxes (0..2), boot_boxes (0..2)
     """
     # IoU gates for each class
-    HEL_IOU_T, VEST_IOU_T, GLOV_IOU_T, BOOT_IOU_T = 0.08, 0.25, 0.10, 0.05
+    HEL_IOU_T, VEST_IOU_T, GLOV_IOU_T, BOOT_IOU_T = 0.08, 0.25, 0.03, 0.05  # ← gloves looser IoU
 
     # Vertical bands (fractions of person height)
     HEAD_FRAC = 0.55
-    HAND_MIN_FRAC, HAND_MAX_FRAC = 0.35, 0.95
+    HAND_MIN_FRAC, HAND_MAX_FRAC = 0.28, 1.02  # ← allow higher/lower hand positions
 
-    # Foot band & bottom alignment (wider + adaptive)
+    # Foot band & bottom alignment
     FOOT_MIN_FRAC = 0.80 if strict_boots else 0.78
     FOOT_MAX_FRAC = 1.08 if strict_boots else 1.12
     BASE_ALIGN_EPS = 0.10 if strict_boots else 0.14  # |y2_boot - y2_person| <= eps*ph
@@ -234,15 +234,15 @@ def match_compliance(
     # Area sanity (relative to person)
     HEL_MIN_A, HEL_MAX_A = 0.004, 0.10
     VEST_MIN_A, VEST_MAX_A = 0.05, 0.45
-    GLOV_MIN_A, GLOV_MAX_A = 0.003, 0.06
-    BOOT_MIN_A = 0.0035  # lenient
+    GLOV_MIN_A, GLOV_MAX_A = 0.0015, 0.07   # ← smaller gloves at distance
+    BOOT_MIN_A = 0.0035
     BOOT_MAX_A = 0.12
 
     # Alignment epsilon adapts by scale / cropping
     align_eps = BASE_ALIGN_EPS
-    if ph < 160:              # small person box → easier
+    if ph < 160:
         align_eps *= 1.8
-    if frame is not None and py2 >= 0.98 * frame.shape[0]:  # cropped at frame bottom
+    if frame is not None and py2 >= 0.98 * frame.shape[0]:
         align_eps *= 1.8
 
     # HELMET (single)
@@ -274,7 +274,7 @@ def match_compliance(
                 break
     vest_ok = best_vb is not None
 
-    # GLOVES (multi: up to 2) — keep hand band even in relaxed mode
+    # GLOVES (multi: up to 2) — softer gates + fallbacks
     glove_boxes: List[List[float]] = []
     valid_g = []
     for gb in gloves:
@@ -287,9 +287,36 @@ def match_compliance(
             and iou(person_box, gb) >= GLOV_IOU_T):
             valid_g.append(gb)
     glove_boxes = _topk_by_iou(valid_g, person_box, k=2, distinct_iou=0.5)
+
+    # Glove fallback (softer area/IoU overlap, still reject obvious bare hand)
+    if not glove_boxes and RELAX:
+        soft_valid_g = []
+        for gb in gloves:
+            ga = xyxy_area(gb)
+            if ga < 0.0020 * p_area or ga > 0.085 * p_area:
+                continue
+            cx, cy = center(gb)
+            if not (py1 + 0.25 * ph <= cy <= py1 + 1.02 * ph):
+                continue
+            if iou(person_box, gb) < 0.03:
+                continue
+            if frame is not None:
+                ed = _edge_density_bgr(frame, gb)
+                if ed <= 0.020:
+                    skin_ratio = _skin_ratio_bgr(frame, gb)
+                    if skin_ratio > 0.92:
+                        continue
+            soft_valid_g.append(gb)
+        glove_boxes = _topk_by_iou(soft_valid_g, person_box, k=2, distinct_iou=0.5)
+
+    # Last-resort: any glove overlapping the person box a bit
+    if not glove_boxes and RELAX:
+        overlap = [gb for gb in gloves if iou(person_box, gb) >= 0.03]
+        glove_boxes = _topk_by_iou(overlap, person_box, k=1, distinct_iou=0.6)
+
     glove_ok = len(glove_boxes) >= 1  # any glove is enough
 
-    # BOOTS (multi: up to 2) — lenient filters + fallbacks
+    # BOOTS (multi: up to 2)
     boot_boxes: List[List[float]] = []
     strict_valid = []
     for bb in boots:
@@ -478,11 +505,12 @@ class PPEDetector:
         glove_boot_model: Optional[str] = None,  # secondary (gloves/boots)
         device: str = "cpu",
         imgsz: int = 832,
+        gb_imgsz: Optional[int] = None,    # NEW: separate input size for GB head
         conf: float = 0.30,         # confidence for primary (HV)
-        gb_conf: float = 0.25,      # confidence for secondary (GB) — easier
+        gb_conf: float = 0.20,      # confidence for secondary (GB) — a bit lower to keep far gloves
         iou: float = 0.70,
         part_conf: float = 0.55,    # per-box filter for PRIMARY
-        gb_part_conf: float = 0.35, # per-box filter for SECONDARY (lenient)
+        gb_part_conf: float = 0.26, # per-box filter for SECONDARY (lenient but not spammy)
         relax: bool = True,
         fix_label_shift: bool = True,
         show_parts: bool = True,
@@ -494,7 +522,7 @@ class PPEDetector:
         on_frames_helmet: int = 3,
         off_frames_helmet: int = 5,
         on_frames_other: int = 2,
-        off_frames_other: int = 4,
+        off_frames_other: int = 5,  # ← slower to drop gloves to reduce flicker
         track_iou: float = 0.30,
         # boots settings (lenient by default)
         strict_boots: bool = False,
@@ -503,6 +531,7 @@ class PPEDetector:
         boot_relax_fallback: bool = True,
     ):
         self.imgsz = imgsz
+        self.gb_imgsz = int(gb_imgsz) if gb_imgsz else imgsz  # default to same if not provided
         self.conf = conf
         self.gb_conf = gb_conf
         self.iou = iou
@@ -527,8 +556,7 @@ class PPEDetector:
         self.person = YOLO(person_model)           # person
         self.ppe2 = YOLO(glove_boot_model) if glove_boot_model else None  # secondary GB
 
-        # ── Device placement with safe fallback (no logic change) ──
-        # If caller asked for cuda but it's not available, fall back to cpu.
+        # Device placement
         want_cuda = str(device).startswith("cuda")
         if want_cuda and (torch is not None) and torch.cuda.is_available():
             self.device = "cuda:0"
@@ -558,8 +586,6 @@ class PPEDetector:
         frame = frame_bgr.copy()
         H, W = frame.shape[:2]
 
-        # Ultralytics can still use CPU if you don't pass device/half here,
-        # so we forward the chosen device and float16 on GPU. (No logic change.)
         use_half = (self.device.startswith("cuda"))
 
         # PERSON pass
@@ -568,12 +594,16 @@ class PPEDetector:
             agnostic_nms=True, verbose=False, device=self.device, half=use_half
         )[0]
         persons_p, p_scores = parse_person_only(r_person, conf_thr=self.person_conf)
-        persons, _ = nms_xyxy(persons_p.tolist(),
-                              p_scores.tolist() if len(persons_p)==len(p_scores) else [0]*len(persons_p),
-                              iou_thr=self.person_iou_nms)
-        persons = dedup_by_center(persons,
-                                  p_scores.tolist() if len(persons_p)==len(p_scores) else [0]*len(persons),
-                                  W, H, center_eps=self.person_center_eps, iou_min=0.5)
+        persons, _ = nms_xyxy(
+            persons_p.tolist(),
+            p_scores.tolist() if len(persons_p) == len(p_scores) else [0] * len(persons_p),
+            iou_thr=self.person_iou_nms
+        )
+        persons = dedup_by_center(
+            persons,
+            p_scores.tolist() if len(persons_p) == len(p_scores) else [0] * len(persons),
+            W, H, center_eps=self.person_center_eps, iou_min=0.5
+        )
 
         # PRIMARY PPE (helmet & vest)
         r_ppe = self.ppe.predict(
@@ -584,11 +614,11 @@ class PPEDetector:
             r_ppe, self.part_conf, fix_label_shift=self.fix_label_shift
         )
 
-        # SECONDARY PPE (gloves & boots)
-        gloves = np.empty((0,4)); boots = np.empty((0,4))
+        # SECONDARY PPE (gloves & boots) — run at higher resolution if provided
+        gloves = np.empty((0, 4)); boots = np.empty((0, 4))
         if self.ppe2 is not None:
             r_ppe2 = self.ppe2.predict(
-                source=frame, imgsz=self.imgsz, conf=self.gb_conf, iou=self.iou,
+                source=frame, imgsz=self.gb_imgsz, conf=self.gb_conf, iou=self.iou,
                 agnostic_nms=True, verbose=False, device=self.device, half=use_half
             )[0]
             gloves, boots = _parse_secondary_glove_boot(r_ppe2, self.gb_part_conf)
@@ -655,7 +685,7 @@ class PPEDetector:
         any_boots  = sm_boot   if persons else False
 
         hud = (
-            f"imgsz:{self.imgsz} conf:{self.conf:.2f} gb_conf:{self.gb_conf:.2f} "
+            f"imgsz:{self.imgsz} gb_imgsz:{self.gb_imgsz} conf:{self.conf:.2f} gb_conf:{self.gb_conf:.2f} "
             f"iou:{self.iou:.2f} part_conf:{self.part_conf:.2f} gb_part:{self.gb_part_conf:.2f} "
             f"device:{self.device} strict_boots:{self.strict_boots} "
             f"two_boots:{self.require_two_boots} relax_fallback:{self.boot_relax_fallback}"
