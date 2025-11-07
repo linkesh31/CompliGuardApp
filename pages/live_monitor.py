@@ -29,22 +29,19 @@ try:
 except Exception:
     def get_db(): return None
 
-# Detector: same pipeline as Entry (YOLOv8n person + custom PPE model with smoothing)
+# Detector
 from services.ppe_infer import PPEDetector
 
 # ───────────────────────── RTSP capture tuning (lower latency) ─────────────────────────
-# You previously forced TCP with big timeouts; for live preview this adds delay.
-# This set keeps TCP, but adds nobuffer/low_delay and smaller probe/analyze windows.
-# (FFmpeg ignores unknown keys, so it’s safe.)
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-    "rtsp_transport;tcp|"          # keep TCP for reliability on Wi-Fi
-    "fflags;nobuffer|"             # disable internal buffering
-    "flags;low_delay|"             # reduce decoder latency
-    "reorder_queue_size;0|"        # don't queue frames
-    "probesize;3200|"              # small probe
-    "analyzeduration;0|"           # no long analysis
-    "stimeout;7000000|"            # 7s open timeout
-    "max_delay;2000000"            # <= 2s muxer delay
+    "rtsp_transport;tcp|"
+    "fflags;nobuffer|"
+    "flags;low_delay|"
+    "reorder_queue_size;0|"
+    "probesize;3200|"
+    "analyzeduration;0|"
+    "stimeout;7000000|"
+    "max_delay;2000000"
 )
 
 # ───────────────────────── helpers ─────────────────────────
@@ -68,7 +65,6 @@ def _zone_id(z: Dict[str, Any]) -> str:
     return _s(z.get("id") or z.get("zone_id") or z.get("doc_id"))
 
 def _zone_level(z: Dict[str, Any]) -> str:
-    """Normalize zone risk level to 'low'/'medium'/'high' ('' if unknown)."""
     t = _s(z.get("risk_level") or z.get("level") or z.get("severity")).lower()
     if t in ("1", "low"): return "low"
     if t in ("2", "medium", "med"): return "medium"
@@ -122,14 +118,6 @@ def _jpeg_b64(img_bgr: np.ndarray, max_side: int = 560, quality: int = 82) -> st
 class LiveMonitorPage(tk.Frame):
     """
     Helmet, Vest, Gloves & Boots monitoring while workers are moving.
-
-    Features:
-      • Violation hold-time (self.violation_hold_s) before logging.
-      • Async snapshot + Firestore write (no UI freeze).
-      • Zone risk levels: high triggers looping alarm + blocking popup (until OK).
-      • Any glove OR any boot counts as OK (same semantics as Entry).
-      • If no person is in frame, the current hold-timer is cancelled.
-      • After high-risk popup “OK”, detection is re-armed immediately (fresh 10s window).
     """
 
     # AddAdmin visual language (beige/tan theme)
@@ -153,7 +141,7 @@ class LiveMonitorPage(tk.Frame):
         self.zones: List[Dict[str, Any]] = []
         self.zone_by_name: Dict[str, Any] = {}
         self.selected_zone = tk.StringVar(value="")
-        self._destroyed = False  # safety flag for async callbacks
+        self._destroyed = False
 
         # Streaming
         self._cap = None
@@ -180,7 +168,7 @@ class LiveMonitorPage(tk.Frame):
         self._alarm_thread: Optional[threading.Thread] = None
         self._alarm_stop = threading.Event()
 
-        # Detector (shared with Entry)
+        # Detector
         self.detector: Optional[PPEDetector] = preloaded_detector if preloaded_detector is not None else None
 
         # UI bits
@@ -225,7 +213,6 @@ class LiveMonitorPage(tk.Frame):
             relief=[("pressed", "sunken")],
         )
 
-        # Combobox on card background
         style.configure(
             "Admin.TCombobox",
             fieldbackground=self.CARD_BG,
@@ -246,16 +233,14 @@ class LiveMonitorPage(tk.Frame):
         wrap = tk.Frame(parent, bg=bg, highlightthickness=0)
         lbl = tk.Label(wrap, text=text, bg=bg, fg=fg, font=("Segoe UI", 9, "bold"))
         lbl.pack(padx=10, pady=4)
-        wrap._lbl = lbl  # store for updates
+        wrap._lbl = lbl
         return wrap
 
     def _build(self, root):
-        # Page title
         tk.Label(root, text="Live Monitor",
                  font=FONTS.get("h2", ("Segoe UI Semibold", 18)),
                  bg=self.PAGE_BG, fg="#222222").pack(anchor="w", padx=16, pady=(10, 2))
 
-        # Main card
         outer, inner = card(root, fg=self.CARD_BG, border_color=self.BORDER_COLOR, border_width=2, pad=(16, 16))
         outer.pack(fill="both", expand=True, padx=16, pady=(6, 12))
         outer.configure(fg_color=self.CARD_BG)
@@ -263,7 +248,6 @@ class LiveMonitorPage(tk.Frame):
         inner.grid_columnconfigure(1, weight=2)
         inner.grid_rowconfigure(1, weight=1)
 
-        # Controls row
         controls = tk.Frame(inner, bg=self.CARD_BG)
         controls.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 6))
         controls.grid_columnconfigure(0, weight=1)
@@ -272,7 +256,6 @@ class LiveMonitorPage(tk.Frame):
         tk.Label(left_controls, text="Zone", font=("Segoe UI", 10, "bold"),
                  bg=self.CARD_BG, fg="#333333").pack(side="left", padx=(0, 8))
 
-        # Combobox bound to selected_zone
         self.zone_menu = ttk.Combobox(
             left_controls,
             textvariable=self.selected_zone,
@@ -284,10 +267,8 @@ class LiveMonitorPage(tk.Frame):
         )
         self.zone_menu.pack(side="left", padx=(0, 8))
         self.zone_menu.bind("<<ComboboxSelected>>", self._on_zone_changed)
-        # Prevent the grey highlight whenever the box gains focus
         self.zone_menu.bind("<FocusIn>", lambda e: self._defocus_zone_menu())
 
-        # Zone badge (selected zone with colored background)
         self._zone_badge = self._pill(left_controls, "", fg=self.BADGE_FG, bg=self.BADGE_BG)
         self._zone_badge.pack(side="left")
 
@@ -298,13 +279,11 @@ class LiveMonitorPage(tk.Frame):
                                  fg="#555555", font=("Segoe UI", 9))
         self._fps_lbl.pack(side="left")
 
-        # Left column (reserved area)
         left = tk.Frame(inner, bg=self.CARD_BG)
         left.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
         tk.Label(left, text="Stream", font=FONTS.get("h3", ("Segoe UI Semibold", 14)),
                  bg=self.CARD_BG, fg="#222222").pack(anchor="w", pady=(4, 8))
 
-        # Right column: video
         right = tk.Frame(inner, bg=self.CARD_BG)
         right.grid(row=1, column=1, sticky="nsew")
         self.video_label = tk.Label(right, text="", bg="#000000", fg="#ffffff")
@@ -316,16 +295,13 @@ class LiveMonitorPage(tk.Frame):
 
         self.after(50, self._ui_update_loop)
 
-    # Keep the combobox looking like image #3 (no selected text)
     def _defocus_zone_menu(self):
         try:
             self.zone_menu.selection_clear()
-            # Move the text cursor to the end, then shift focus to video area.
             self.zone_menu.icursor(tk.END)
         except Exception:
             pass
         try:
-            # put focus on a neutral widget so the combobox loses the grey selection
             if self.video_label and self.video_label.winfo_exists():
                 self.video_label.focus_set()
             else:
@@ -401,10 +377,9 @@ class LiveMonitorPage(tk.Frame):
         self.zone_by_name = { _zone_display_name(z): z for z in monitor_zones }
         names = list(self.zone_by_name.keys())
         self.zone_menu["values"] = names
-        self.selected_zone.set(names[0])          # shows inside combobox
-        self._set_zone_badge(names[0])            # and as a colored pill
+        self.selected_zone.set(names[0])
+        self._set_zone_badge(names[0])
 
-        # Make sure it looks like image #3 on load
         self.after(10, self._defocus_zone_menu)
 
         self._load_detector()
@@ -433,7 +408,6 @@ class LiveMonitorPage(tk.Frame):
         self._current_camera = cam
         self._camera_src = src
 
-        # reset violation episode state when zone changes
         self._reset_violation_episode(reset_cooldown=True)
 
         self._stop_reader.set()
@@ -444,8 +418,8 @@ class LiveMonitorPage(tk.Frame):
         if not cap or not cap.isOpened():
             self._set_offline("Camera Offline."); return
         try:
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)     # keep queue small
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)     # make sure we start 'now'
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         except Exception:
             pass
         self._cap, self._online = cap, True
@@ -464,7 +438,7 @@ class LiveMonitorPage(tk.Frame):
             ok, frame = cap.read()
             if not ok:
                 self._online = False
-                time.sleep(0.01)  # smaller sleep to recover faster
+                time.sleep(0.01)
                 continue
             self._online = True
             self._last_frame = frame
@@ -477,7 +451,6 @@ class LiveMonitorPage(tk.Frame):
             pass
         self._cap = None
 
-    # Async logging (no UI freeze)
     def _log_violation_async(self, full_bgr: np.ndarray, risk: str, zone_level: str):
         now = time.time()
         if (now - self._last_violation_ts) < self._violation_cooldown_s:
@@ -519,13 +492,12 @@ class LiveMonitorPage(tk.Frame):
                     "snapshot_b64": snap_b64,
                     "note": f"Live monitor — {zone_level or 'unknown'} risk zone",
                 }
-                db.collection("violations").add(doc)
+                get_db().collection("violations").add(doc)
             except Exception:
                 pass
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    # Alarm control (loop until OK)
     def _start_alarm_loop(self):
         if self._alarm_thread and self._alarm_thread.is_alive():
             return
@@ -566,7 +538,6 @@ class LiveMonitorPage(tk.Frame):
         self._alarm_stop.set()
 
     def _reset_violation_episode(self, reset_cooldown: bool = False):
-        """Clear current hold timer and (optionally) cooldown so detection re-arms immediately."""
         self._viol_start_ts = 0.0
         self._viol_kind = None
         self._viol_raised = False
@@ -606,9 +577,9 @@ class LiveMonitorPage(tk.Frame):
                            relief="flat", padx=18, pady=6, command=_on_ok)
         ok_btn.pack()
         try: ok_btn.focus_set()
-        except Exception: pass
+        except Exception:
+            pass
 
-    # Risk code
     def _compute_risk_code(self, h_ok: bool, v_ok: bool, g_ok: bool, b_ok: bool) -> Optional[str]:
         missing = []
         if not h_ok: missing.append("helmet")
@@ -621,7 +592,6 @@ class LiveMonitorPage(tk.Frame):
             return "helmet_and_vest_missing"
         return f"{'_'.join(missing)}_missing"
 
-    # Parse "P:.." from DetectorResult.counts_text
     def _parse_person_count(self, counts_text: str) -> int:
         if not counts_text:
             return 0
@@ -634,7 +604,6 @@ class LiveMonitorPage(tk.Frame):
             pass
         return 0
 
-    # UI tick
     def _ui_update_loop(self):
         if self._destroyed or not self._safe_widget(self): return
         frame = self._last_frame
@@ -645,7 +614,6 @@ class LiveMonitorPage(tk.Frame):
                 try:
                     annotated, res = self.detector.infer(disp)
 
-                    # If no persons in frame, cancel any ongoing violation episode.
                     person_count = self._parse_person_count(getattr(res, "counts_text", ""))
                     if person_count == 0:
                         self._reset_violation_episode()
@@ -683,7 +651,6 @@ class LiveMonitorPage(tk.Frame):
                 except Exception:
                     pass
 
-            # draw to UI
             if self._safe_widget(self.video_label):
                 h, w = max(1, self.video_label.winfo_height()), max(1, self.video_label.winfo_width())
                 fh, fw = disp.shape[:2]; scale = min(w/max(1,fw), h/max(1,fh))
@@ -721,7 +688,6 @@ class LiveMonitorPage(tk.Frame):
             self.after(10, self._defocus_zone_menu)
             return
         self._open_zone_stream(name)
-        # Make it look like image #3 immediately after switching
         self.after(10, self._defocus_zone_menu)
 
     def destroy(self):
@@ -759,8 +725,8 @@ class LiveMonitorPage(tk.Frame):
 
         # secondary gloves/boots
         gb_candidates = [
-            os.path.join("data", "models", "gloves_shoes_yolo9e.pt"),
-            os.path.join("data", "model",  "gloves_shoes_yolo9e.pt"),
+            os.path.join("data", "models", "sh17_gloves_shoes_yolo9e.pt"),
+            os.path.join("data", "model",  "sh17_gloves_shoes_yolo9e.pt"),
             os.path.join("data", "models", "gloves.pt"),
             os.path.join("data", "models", "gloves_boots.pt"),
         ]
@@ -780,7 +746,6 @@ class LiveMonitorPage(tk.Frame):
             self._set_chip("Model not found", ok=False)
             return
 
-        # prefer GPU if available; this is NOT a logic change, just device selection
         device = "cuda:0"
         try:
             import torch
@@ -790,27 +755,31 @@ class LiveMonitorPage(tk.Frame):
             device = "cpu"
 
         try:
+            # Key settings: give GB more pixels & relax glove thresholds
             self.detector = PPEDetector(
                 ppe_model=ppe_path,
                 person_model=person_model,
                 glove_boot_model=gb_model,
                 device=device,
-                imgsz=832,
+                imgsz=1152,          # main pass
+                gb_imgsz=1280,       # GB head gets extra pixels for far gloves
                 conf=0.30,
                 iou=0.70,
                 part_conf=0.55,
+                gb_conf=0.20,        # allow more glove proposals
+                gb_part_conf=0.26,   # filter a bit after proposal
                 relax=True,
                 fix_label_shift=True,
                 show_parts=True,
                 person_conf=0.25,
                 person_iou_nms=0.80,
-                person_center_eps=0.08,
+                person_center_eps=0.10,  # slightly larger to avoid tiny-person merges
                 prefer_person_from_parts=False,
                 # smoothing / flicker resistance
                 on_frames_helmet=3,
                 off_frames_helmet=5,
                 on_frames_other=2,
-                off_frames_other=4,
+                off_frames_other=5,
                 track_iou=0.30,
             )
             gb_name = os.path.basename(gb_model) if gb_model else "—"
