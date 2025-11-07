@@ -37,7 +37,14 @@ from services.ppe_infer import PPEDetector, DetectorResult
 
 # Make RTSP robust
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-    "rtsp_transport;tcp|stimeout;10000000|max_delay;5000000"
+    "rtsp_transport;tcp|"
+    "fflags;nobuffer|"
+    "flags;low_delay|"
+    "reorder_queue_size;0|"
+    "probesize;3200|"
+    "analyzeduration;0|"
+    "stimeout;7000000|"
+    "max_delay;2000000"
 )
 
 # ───────────────────────── helpers ─────────────────────────
@@ -122,7 +129,6 @@ def _show_modal(
     details: Optional[List[str]] = None,
     autoclose_ms: int = 5000,      # 5 seconds
 ) -> tk.Toplevel:
-    # (kept as-is to preserve your popup behavior)
     bg = "#0f172a"       # slate-900
     text = "#e2e8f0"     # slate-200
     sub = "#cbd5e1"      # slate-300
@@ -186,7 +192,7 @@ def _show_modal(
     return top
 
 
-# ───────────────────────── Entry Page (UI restyled only) ─────────────────────────
+# ───────────────────────── Entry Page (UI restyled; logic per your spec) ─────────────────────────
 class EntryPage(tk.Frame):
     """
     10-second PPE check window:
@@ -197,7 +203,7 @@ class EntryPage(tk.Frame):
       • After any popup, require scene clear (P==0) before next window.
     """
 
-    # Match AddAdmin page theme
+    # Theme (match AddAdmin page)
     PAGE_BG = "#E6D8C3"
     TEXT_FG = "#000000"
     ENTRY_BG = "#F5EEDF"
@@ -208,7 +214,7 @@ class EntryPage(tk.Frame):
         self.controller = controller
         apply_theme(self)
 
-        # Apply the same overrides & ttk styles used by Add Admin
+        # Apply overrides & ttk styles
         self._apply_page_theme_overrides()
         self._init_styles()
 
@@ -248,7 +254,7 @@ class EntryPage(tk.Frame):
         self._build()
         self.after(50, self._init_data)
 
-    # ───────── UI styling (match AddAdmin) ─────────
+    # ───────── UI styling ─────────
     def _apply_page_theme_overrides(self):
         self.option_add("*Background", self.PAGE_BG)
         self.option_add("*Foreground", self.TEXT_FG)
@@ -259,7 +265,6 @@ class EntryPage(tk.Frame):
         self.option_add("*selectForeground", "#FFFFFF")
 
     def _init_styles(self):
-        # Use a theme that respects color maps for widgets
         try:
             ttk.Style().theme_use("clam")
         except Exception:
@@ -269,7 +274,6 @@ class EntryPage(tk.Frame):
         accent = "#0077b6"
         hover = "#00b4d8"
 
-        # Modern button — blue like Add Admin
         self.style.configure(
             "Modern.TButton",
             font=("Segoe UI Semibold", 10),
@@ -286,7 +290,6 @@ class EntryPage(tk.Frame):
             relief=[("pressed", "sunken")]
         )
 
-        # Slim muted label
         self.style.configure(
             "Muted.TLabel",
             background=self.CARD_BG,
@@ -294,7 +297,6 @@ class EntryPage(tk.Frame):
             font=("Segoe UI", 10)
         )
 
-        # Combobox visuals — keep WHITE always (no gray selection)
         self.style.configure(
             "Modern.TCombobox",
             fieldbackground="#FFFFFF",
@@ -312,9 +314,8 @@ class EntryPage(tk.Frame):
             selectforeground=[("readonly", "#000000"), ("focus", "#000000"), ("!disabled", "#000000")],
         )
 
-    # UI (layout only; logic unchanged)
+    # UI (layout)
     def _build(self):
-        # Header
         header = tk.Frame(self, bg=self.PAGE_BG)
         header.pack(fill="x", padx=16, pady=(12, 8))
         tk.Label(
@@ -322,9 +323,7 @@ class EntryPage(tk.Frame):
             font=("Segoe UI Semibold", 18),
             bg=self.PAGE_BG, fg="#222222"
         ).pack(anchor="w")
-        # (Removed the descriptive sentence under the title)
 
-        # Controls card
         ctrl_card, ctrl_inner = card(self, fg=self.CARD_BG, border_color="#DCCEB5", border_width=2, pad=(18, 12))
         ctrl_card.pack(fill="x", padx=16, pady=(6, 12))
         ctrl_card.configure(fg_color=self.CARD_BG)
@@ -346,7 +345,6 @@ class EntryPage(tk.Frame):
             command=lambda: self._open_zone_stream(self.selected_zone.get())
         ).pack(side="left")
 
-        # Main card
         main_card, main_inner = card(self, fg=self.CARD_BG, border_color="#DCCEB5", border_width=2)
         main_card.pack(fill="both", expand=True, padx=16, pady=(0, 14))
         main_card.configure(fg_color=self.CARD_BG)
@@ -355,7 +353,6 @@ class EntryPage(tk.Frame):
         main_inner.grid_columnconfigure(1, weight=1)
         main_inner.grid_rowconfigure(0, weight=1)
 
-        # Video panel
         video_wrap = tk.Frame(main_inner, bg=self.CARD_BG)
         video_wrap.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
 
@@ -368,7 +365,6 @@ class EntryPage(tk.Frame):
         )
         self.status.pack(fill="x", padx=6, pady=(2, 6))
 
-        # PPE side panel
         ppe_wrap = tk.Frame(main_inner, bg=self.CARD_BG)
         ppe_wrap.grid(row=0, column=1, sticky="nsw")
 
@@ -392,24 +388,21 @@ class EntryPage(tk.Frame):
             pill.pack(side="right")
             self._ppe_rows[gear] = pill
 
-        # (Counts label and "Green/Red" sentence removed)
-
-        # Start UI updater
         self.after(50, self._ui_update_loop)
 
-    # data init (unchanged)
+    # data init
     def _init_data(self):
         try: user = require_user(self.controller)
         except Exception: user = {}
         try: prof = get_profile() or {}
         except Exception: prof = {}
+
         self.company_id = _extract_company_id(user, prof)
         if not self.company_id:
             self._set_offline("No company assigned.")
             self.zone_menu["values"] = ["(No Company)"]; self.selected_zone.set("(No Company)")
             return
 
-        # zones
         try: zones = list_zones(self.company_id)
         except Exception: zones = _fs_fetch_zones(self.company_id)
         zones = [z for z in zones if _s(z.get("company_id")) == self.company_id]
@@ -434,9 +427,9 @@ class EntryPage(tk.Frame):
         self.selected_zone.set(names[0])
         self.zone_menu.configure(state="disabled" if len(names) == 1 else "readonly")
 
-        # Load detector
+        # Load detector with glove-boosted settings (same tuning as Live Monitor)
         try:
-            # primary PPE
+            # primary PPE (HV)
             p1 = os.path.join("data", "model", "best.pt")
             p2 = os.path.join("data", "models", "best.pt")
             ppe_path = p1 if os.path.exists(p1) else (p2 if os.path.exists(p2) else None)
@@ -448,10 +441,10 @@ class EntryPage(tk.Frame):
             y2 = os.path.join("data", "models", "yolov8n.pt")
             person_model = y1 if os.path.exists(y1) else (y2 if os.path.exists(y2) else "yolov8n.pt")
 
-            # secondary gloves/boots (try specific file first, then scan)
+            # secondary gloves/boots (try known names; else scan)
             gb_candidates = [
-                os.path.join("data", "models", "gloves_shoes_yolo9e.pt"),
-                os.path.join("data", "model",  "gloves_shoes_yolo9e.pt"),
+                os.path.join("data", "models", "sh17_gloves_shoes_yolo9e.pt"),
+                os.path.join("data", "model",  "sh17_gloves_shoes_yolo9e.pt"),
                 os.path.join("data", "models", "gloves.pt"),
                 os.path.join("data", "models", "gloves_boots.pt"),
             ]
@@ -465,14 +458,41 @@ class EntryPage(tk.Frame):
                                 gb_model = os.path.join(root, f); break
                     if gb_model: break
 
+            # device pick
+            device = "cpu"
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    device = "cuda:0"
+            except Exception:
+                device = "cpu"
+
+            # IMPORTANT: bigger GB pass + softer glove thresholds
             self.detector = PPEDetector(
                 ppe_model=ppe_path,
                 person_model=person_model,
-                glove_boot_model=gb_model,          # ← secondary (can be None)
-                device="cuda:0", imgsz=832,
-                conf=0.30, gb_conf=0.30, iou=0.70,
+                glove_boot_model=gb_model,
+                device=device,
+                imgsz=1152,          # main pass
+                gb_imgsz=1280,       # more pixels for gloves/boots
+                conf=0.30,
+                gb_conf=0.20,        # allow more glove proposals
+                iou=0.70,
                 part_conf=0.55,
-                relax=True, fix_label_shift=True, show_parts=True,
+                gb_part_conf=0.26,   # filter after proposal
+                relax=True,
+                fix_label_shift=True,
+                show_parts=True,
+                person_conf=0.25,
+                person_iou_nms=0.80,
+                person_center_eps=0.10,
+                prefer_person_from_parts=False,
+                # smoothing (same as live monitor to reduce glove flicker)
+                on_frames_helmet=3,
+                off_frames_helmet=5,
+                on_frames_other=2,
+                off_frames_other=5,
+                track_iou=0.30,
             )
             sec_name = os.path.basename(gb_model) if gb_model else "—"
             self.status.config(
@@ -484,7 +504,7 @@ class EntryPage(tk.Frame):
 
         self._open_zone_stream(names[0])
 
-    # camera handling (unchanged)
+    # camera handling
     def _open_zone_stream(self, zone_name: str):
         zone = self.zone_by_name.get(zone_name)
         if not zone:
@@ -513,8 +533,11 @@ class EntryPage(tk.Frame):
         cap = cv2.VideoCapture(src, cv2.CAP_FFMPEG)
         if not cap or not cap.isOpened():
             self._set_offline("Camera Offline."); return
-        try: cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        except Exception: pass
+        try:
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        except Exception:
+            pass
 
         self._cap = cap
         self._online = True
@@ -566,7 +589,7 @@ class EntryPage(tk.Frame):
                     # Right-side panel
                     self._update_ppe_panel_from_result(result)
 
-                    # ── 10-second logic with simple 2s success delay ──
+                    # 10-second logic with 2s success delay
                     now = time.time()
                     persons = self._parse_person_count(getattr(result, "counts_text", ""))
                     scene_clear = (persons == 0)
@@ -591,7 +614,6 @@ class EntryPage(tk.Frame):
                             compliant = helmet and vest and gloves and boots
 
                             remaining = max(0, int(round(self._check_deadline - now)))
-                            # Keep ENTRY TIMER overlay (requested)
                             cv2.putText(self._last_annotated, f"ENTRY TIMER: {remaining}s",
                                         (12, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
                                         (0, 255, 0) if compliant else (0, 0, 255), 2, cv2.LINE_AA)
@@ -612,9 +634,6 @@ class EntryPage(tk.Frame):
                                 self._check_active = False
                                 self._reset_required = True
                                 self.status.config(text="⚠ Missing PPE — access denied.")
-
-                    # REMOVE counts_text overlay on the video (as requested)
-                    # (Previously drew counts_text at (12,28); now removed.)
 
                 except Exception:
                     self._update_ppe_panel(False, False, False, False)
@@ -638,7 +657,7 @@ class EntryPage(tk.Frame):
 
         self.after(66, self._ui_update_loop)  # ~15 FPS
 
-    # success confirm handler (unchanged)
+    # success confirm handler
     def _confirm_success(self):
         if not self._check_active:
             self._success_timer_id = None
@@ -696,7 +715,7 @@ class EntryPage(tk.Frame):
         self._reset_required = False
         self._cancel_success_timer()
 
-    # ───────────────────── popup helpers (unchanged) ─────────────────────
+    # ───────────────────── popup helpers ─────────────────────
     def _show_success_popup(self):
         self._last_modal = _show_modal(
             self, "success",
@@ -716,14 +735,13 @@ class EntryPage(tk.Frame):
             autoclose_ms=5000
         )
 
-    # ───────────────────── panel helpers (unchanged) ─────────────────────
+    # ───────────────────── panel helpers ─────────────────────
     def _update_ppe_panel_from_result(self, res: DetectorResult):
         h = bool(getattr(res, "any_helmet", False))
         v = bool(getattr(res, "any_vest", False))
         g = bool(getattr(res, "any_gloves", False))
         b = bool(getattr(res, "any_boots", False))
         self._update_ppe_panel(h, v, g, b)
-        # counts overlay/label removed
 
     def _update_ppe_panel(self, helmet: bool, vest: bool, gloves: bool, boots: bool):
         def set_row(gear: str, ok: bool):
